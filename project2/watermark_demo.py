@@ -4,11 +4,13 @@ import numpy as np
 import os
 import math
 import traceback
+from PIL import Image
 
 class WatermarkProcessor:
     def __init__(self, password=1234):
         self.password = password
         # 添加中文路径支持
+        # 禁用多进程以避免中文路径问题
         self.bwm = WaterMark(password_img=1, password_wm=1, processes=1)
         self.attack_methods = {
             'flip': self.flip_attack,
@@ -17,35 +19,43 @@ class WatermarkProcessor:
             'contrast': self.contrast_attack
         }
 
-    def embed_watermark(self, img_path, wm_path, output_path):
+    def embed_watermark(self, img_path, watermark_path, output_img):
         """嵌入水印到原始图像"""
         # 验证图像文件是否存在
         if not os.path.exists(img_path):
             raise FileNotFoundError(f"原始图像文件不存在: {img_path}")
         
         # 验证水印文件是否存在
-        if not os.path.exists(wm_path):
-            raise FileNotFoundError(f"水印文件不存在: {wm_path}")
+        if not os.path.exists(watermark_path):
+            raise FileNotFoundError(f"水印文件不存在: {watermark_path}")
         
-        # 读取水印文本并计算合适的水印形状
-        with open(wm_path, 'r', encoding='utf-8') as f:
+        # 读取水印文本内容（关键修复）
+        with open(watermark_path, 'r', encoding='utf-8') as f:
             watermark_text = f.read().strip()
-        
-        # 根据文本长度计算水印形状（宽度为字符数，高度为1）
-        wm_shape = (len(watermark_text), 1)
+            if not watermark_text:
+                raise ValueError("水印文本不能为空")
         
         self.bwm.read_img(img_path)
-        self.bwm.read_wm(watermark_text, mode='str')  # 直接传入文本内容
-        self.bwm.embed(output_path)
-        print(f"水印已嵌入: {output_path}")
-        return output_path, wm_shape
+        self.bwm.read_wm(watermark_text, mode='str')
+        self.bwm.embed(output_img)
+        
+        # 使用官方推荐方式获取水印长度
+        wm_shape = len(self.bwm.wm_bit)
+        return output_img, wm_shape
 
     def extract_watermark(self, img_path, wm_shape, output_wm_path):
         """从图像中提取水印"""
         if not os.path.exists(img_path):
             raise FileNotFoundError(f"待提取图像文件不存在: {img_path}")
         
-        self.bwm.extract(img_path, wm_shape=wm_shape, out_wm_name=output_wm_path)
+        # 修改：提取文本水印时不使用out_wm_name参数，而是捕获返回值
+        # 确保wm_shape是整数而非元组
+        if isinstance(wm_shape, tuple):
+            wm_shape = wm_shape[0]  # 从(25, 1)提取25
+        wm_extract = self.bwm.extract(img_path, wm_shape=wm_shape, mode='str')
+        # 手动将文本水印写入文件
+        with open(output_wm_path, 'w', encoding='utf-8') as f:
+            f.write(wm_extract)
         print(f"水印已提取: {output_wm_path}")
         return output_wm_path
 
@@ -158,3 +168,6 @@ if __name__ == '__main__':
         # 修复print语句错误
         print(f"处理过程中出错: {str(e)}")
         traceback.print_exc()
+    # 添加路径调试信息
+    print(f"工作目录: {os.getcwd()}")
+    print(f"水印文件路径: {WATERMARK_TEXT_PATH}, 存在: {os.path.exists(WATERMARK_TEXT_PATH)}")
