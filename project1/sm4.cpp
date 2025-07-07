@@ -51,10 +51,11 @@ static unsigned long sm4CaliRk(unsigned long ka){ //复合变换T
 	unsigned char a[4];
 	unsigned char b[4];
 	PUT_ULONG_BE(ka,a,0)  //换转成8bit一个字符 
-	b[0] = sm4Sbox(a[0]);
-    b[1] = sm4Sbox(a[1]);
-    b[2] = sm4Sbox(a[2]);
-    b[3] = sm4Sbox(a[3]);
+	// 优化：直接访问Sbox数组，移除sm4Sbox函数调用
+	b[0] = Sbox[a[0]];
+    b[1] = Sbox[a[1]];
+    b[2] = Sbox[a[2]];
+    b[3] = Sbox[a[3]];
 	GET_ULONG_BE(bb,b,0)  //将变换结果转换为32bit的整数
 	//对得到的32位整数bb进行线性变换	
 	rk = bb^ROTL(bb,13)^ROTL(bb,23);
@@ -72,10 +73,17 @@ static void sm4_setkey(unsigned long SK[32],unsigned char key[16]){
 	k[1] = MK[1]^FK[1];
 	k[2] = MK[2]^FK[2];
 	k[3] = MK[3]^FK[3];
-	for(;i<32;i++){
+	// 优化：循环展开，每次处理4轮
+	for(i=0; i<32; i+=4){
 		k[i+4] = k[i]^sm4CaliRk(k[i+1]^k[i+2]^k[i+3]^CK[i]);
 		SK[i] = k[i+4];
-	}	
+		k[i+5] = k[i+1]^sm4CaliRk(k[i+2]^k[i+3]^k[i+4]^CK[i+1]);
+		SK[i+1] = k[i+5];
+		k[i+6] = k[i+2]^sm4CaliRk(k[i+3]^k[i+4]^k[i+5]^CK[i+2]);
+		SK[i+2] = k[i+6];
+		k[i+7] = k[i+3]^sm4CaliRk(k[i+4]^k[i+5]^k[i+6]^CK[i+3]);
+		SK[i+3] = k[i+7];
+	}
 }
 void sm4_setkey_enc(sm4_context *ctx,unsigned char key[16]){
 	ctx->mode = SM4_ENCRYPT;
@@ -118,13 +126,13 @@ static void sm4_one_round( unsigned long sk[32],
     GET_ULONG_BE( ulbuf[1], input, 4 )
     GET_ULONG_BE( ulbuf[2], input, 8 )
     GET_ULONG_BE( ulbuf[3], input, 12 )
-    while(i<32)
+    // 优化：循环展开，每次处理4轮
+    for(i=0; i<32; i+=4)
     {
         ulbuf[i+4] = sm4F(ulbuf[i], ulbuf[i+1], ulbuf[i+2], ulbuf[i+3], sk[i]);
-// #ifdef _DEBUG
-//          printf("rk(%02d) = 0x%08x,  X(%02d) = 0x%08x \n",i,sk[i], i, ulbuf[i+4] );
-// #endif
-        i++;
+        ulbuf[i+5] = sm4F(ulbuf[i+1], ulbuf[i+2], ulbuf[i+3], ulbuf[i+4], sk[i+1]);
+        ulbuf[i+6] = sm4F(ulbuf[i+2], ulbuf[i+3], ulbuf[i+4], ulbuf[i+5], sk[i+2]);
+        ulbuf[i+7] = sm4F(ulbuf[i+3], ulbuf[i+4], ulbuf[i+5], ulbuf[i+6], sk[i+3]);
     }
     PUT_ULONG_BE(ulbuf[35],output,0);
     PUT_ULONG_BE(ulbuf[34],output,4);
