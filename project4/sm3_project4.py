@@ -1,7 +1,3 @@
-# sm3_project4.py
-# 完整交付：SM3 参考实现、优化版本、length-extension 攻击示范、
-# RFC6962-style Merkle 树（支持 100k leaves）、包含/不存在证明的生成与验证。
-# Python 3.8+
 
 from typing import List, Tuple
 import struct
@@ -9,9 +5,6 @@ import math
 import time
 import os
 
-# ------------------------
-# 低级工具
-# ------------------------
 def rol32(x: int, n: int) -> int:
     return ((x << n) & 0xFFFFFFFF) | ((x & 0xFFFFFFFF) >> (32 - n))
 
@@ -22,9 +15,7 @@ def bytes_to_u32_list(b: bytes) -> List[int]:
 def u32_list_to_bytes(l: List[int]) -> bytes:
     return struct.pack('>' + 'I'*len(l), *l)
 
-# ------------------------
-# SM3 参考实现（清晰版）
-# ------------------------
+
 class SM3:
     """
     参考实现的 SM3（便于学习与验证）
@@ -148,11 +139,7 @@ class SM3:
         return m.digest()
 
 # ------------------------
-# SM3 优化版本（纯 Python 层面的优化）
-# - 使用局部变量大量减少 self._V 访问开销
-# - 尽量避免创建太多中间 bytes，直接用 struct/unpack
-# - 仍为纯 Python（兼容性好），较 reference 实现快一点
-# ------------------------
+
 class SM3Optimized:
     IV = SM3.IV
     T_j = SM3.T_j
